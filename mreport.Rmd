@@ -1,0 +1,231 @@
+---
+title: "Data Science Capstone Milestone Report"
+author: "Basudha Misra"
+date: "December 15, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+This is an exploratory analysis for the Data Science Capstone project Milestone Report for John Hopkins University Data Science Capstone Project course offered through Coursera. Here we download the sample data file offered by Swiftkey, summarize it, perform some exploratory analysis on a small data set radomly chosen from the provided sample data set by Swiftkey. Finally we discuss the plans for prediction alogorithm for the Shiny App.
+
+## Data Download
+
+We download and extract files from the following source: https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip
+
+```{r download,eval = F}
+
+# source and destination of the download
+destination <- "Coursera-SwiftKey.zip"
+source <- "http://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip"
+
+# downloading
+download.file(source, destination)
+
+# extracting files from the zip file
+unzip(destination)
+
+```
+
+Here we have data in four different languages and each language data comes from three different sources:
+
+| Language   | Sources   |
+|:---------: | :-------:|
+|German   |          |     
+|English  | News     |   
+|Finnish  | Blogs    |
+|Russian  | Twitter  |
+
+We work only with English language files.
+
+## Data Summary
+
+We mention the necessary packages for this analysis. We summarize the English language data in this section.
+
+```{r packages, results='hide', message=FALSE, warning=FALSE}
+
+# necessary packages
+library(stringi)
+library(dplyr)
+library(tm)
+Sys.setenv(JAVA_HOME='C:\\Program Files\\Java\\jre1.8.0_152')
+library(RWeka)
+library(ggplot2)
+
+```
+
+```{r upload}
+
+# uploading data
+blogs <- readLines("final/en_US/en_US.blogs.txt", encoding = "UTF-8", skipNul = TRUE, warn = FALSE)
+news <- readLines("final/en_US/en_US.news.txt", encoding = "UTF-8", skipNul = TRUE, warn = FALSE)
+twitter <- readLines("final/en_US/en_US.twitter.txt", encoding = "UTF-8", skipNul = TRUE, warn = FALSE)
+
+```
+ 
+```{r summary}
+
+# number of words
+words.blogs <- stri_count_words(blogs)
+words.news <- stri_count_words(news)
+words.twitter <- stri_count_words(twitter)
+
+# sizes of the files in MB
+size.blogs <- file.info("final/en_US/en_US.blogs.txt")$size/1024^2
+size.news <- file.info("final/en_US/en_US.news.txt")$size/1024^2
+size.twitter <- file.info("final/en_US/en_US.twitter.txt")$size/1024^2
+
+# data summary
+summary.table <- data.frame(filename = c("blogs","news","twitter"),
+                            file.size.MB = c(size.blogs, size.news, size.twitter),
+                            num.lines = c(length(blogs),length(news),length(twitter)),
+                            num.words =   
+                            c(sum(words.blogs),sum(words.news), sum(words.twitter)),
+                            mean.num.words = 
+                            c(mean(words.blogs),mean(words.news),mean(words.twitter)))
+summary.table
+
+```
+
+## Data preprocessing and cleaning
+
+English language complete data size is too large. We choose a random 1% of these whole data as our sample data. Here onwards we work with this sample data only for this exploratory analysis. 
+ 
+```{r sampling}
+
+# sampling the data
+set.seed(2601)
+sample.blogs <- blogs %>%
+                sample(length(blogs)*0.01)
+sample.news <-  news %>%
+                sample(length(news)*0.01) 
+sample.twitter <- twitter %>%
+                sample(length(twitter)*0.01) 
+
+sample.data <- c(sample.blogs,sample.news,sample.twitter) %>%
+                sapply(function(row) iconv(row, "latin1", "ASCII", sub=""))
+
+# data summary of sample data
+words.sample <- stri_count_words(sample.data)
+summary.sample <- data.frame(filename = "sample.data",
+                            num.lines = length(sample.data) ,
+                            num.words = sum(words.sample),
+                            mean.num.words = mean(words.sample))
+summary.sample
+
+```
+
+We perform various preprocess cleaning on this sample data before actually analyzing it. 
+
+```{r preprocessing }
+
+# creating cleaning function
+toSpace <- content_transformer(function(x, pattern) gsub(pattern, " ", x))
+preprocessCorpus <- function(corpus){
+    corpus <- tm_map(corpus, toSpace, "/|@|\\|") %>%
+              tm_map(content_transformer(tolower)) %>%
+              tm_map(removeNumbers) %>%
+              tm_map(removePunctuation) %>%
+              tm_map(removeWords, stopwords("english")) %>%
+              tm_map(stripWhitespace) 
+    return(corpus)
+}
+
+# cleaning sample data
+sample.data <- VCorpus(VectorSource(sample.data))
+sample.data <- preprocessCorpus(sample.data)
+ 
+
+```
+
+## Building N-gram Models
+
+We first check the most frequent used words in the sample and then build bigram, trigram and quadgram models. Each n-gram model summarizes the frequencies of the appearence of the most used n-words together.
+
+
+```{r ngrammodel }
+
+# creating frequency calculating function
+freq.frame <- function(tdm){
+    freq <- tdm %>%
+            as.matrix() %>%
+            rowSums() %>%
+            sort(decreasing=TRUE)
+    freq.frame <- data.frame(word=names(freq), freq=freq)
+    return(freq.frame)
+}
+
+# tokenizer functions
+BigramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min=2, max=2))
+TrigramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min=3, max=3))
+QuadgramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min=4, max=4))
+
+# calculating frequencies for various n-gram models
+unifreq <- sample.data %>%
+           TermDocumentMatrix %>% 
+           removeSparseTerms(0.9999) %>%
+           freq.frame
+
+bifreq <-  sample.data %>%
+           TermDocumentMatrix(control=list(tokenize=BigramTokenizer)) %>%
+           removeSparseTerms(0.9999) %>%
+           freq.frame
+
+trifreq <-  sample.data %>%
+           TermDocumentMatrix(control=list(tokenize=TrigramTokenizer)) %>%
+           removeSparseTerms(0.9999) %>%
+           freq.frame
+
+```
+
+## Exploratory Analysis
+
+We present top 15 most common unigram, bigram, trigrams.
+
+```{r plots }
+
+# creating unigram plot
+ggplot(unifreq[1:15,], aes(x = reorder(word, -freq), y = freq)) +
+    geom_bar(stat ="identity", colour = "green", fill = "seagreen", show.legend = F) +
+    geom_text(aes(label = freq), vjust = 0) +
+    labs(y = "Frequency",title ="Most Common Unigrams in Text Sample") +
+    theme(axis.title.x = element_blank(), 
+          axis.text.x = element_text(angle = 60, size = 12, hjust = 1),
+          plot.title = element_text(hjust = 0.5)) 
+
+
+
+# creating bigram plot
+ggplot(bifreq[1:15,], aes(x = reorder(word, -freq), y = freq)) +
+    geom_bar(stat ="identity", colour = "green", fill = "seagreen", show.legend = F) +
+    geom_text(aes(label = freq), vjust = 0) +
+    labs(y = "Frequency",title ="Most Common Bigrams in Text Sample") +
+    theme(axis.title.x = element_blank(), 
+          axis.text.x = element_text(angle = 60, size = 12, hjust = 1),
+          plot.title = element_text(hjust = 0.5)) 
+
+
+# creating trigram plot
+ggplot(trifreq[1:15,], aes(x = reorder(word, -freq), y = freq)) +
+    geom_bar(stat ="identity", colour = "green", fill = "seagreen", show.legend = F) +
+    geom_text(aes(label = freq), vjust = 0) +
+    labs(y = "Frequency",title ="Most Common Trigrams in Text Sample") +
+    theme(axis.title.x = element_blank(), 
+          axis.text.x = element_text(angle = 60, size = 12, hjust = 1),
+          plot.title = element_text(hjust = 0.5)) 
+
+```
+
+
+## Future Plans for Prediction Strategies for Shiny APP
+
+Our exploratory analysis completes here. Next task is to build our prediction algorithm and use it to build the Shiny App.
+
+We need to further explore the calculation time reducing factor to build the prediction algorithm. Otherwise we can use n-gram model with frequency lookup similar to our exploratory analysis for the prediction algorithm. For example the trigram model can be used to predict the next word. If nothing matches trigram model prediction, then the algorithm would go back to the bigram model, and so forth if needed.
+
+Shiny App user interface will have a text box where user can type text and then our prediction model will suggest one or more possible words for the next choice of word.
+
