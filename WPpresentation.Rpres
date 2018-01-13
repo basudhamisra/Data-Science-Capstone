@@ -1,0 +1,59 @@
+Next Word Prediction Model
+========================================================
+
+author: Basudha Misra
+
+date: January 12, 2018
+
+
+Prepared for Data Science Capstone Project offered
+by John Hopkins University in association with
+Coursera and Swiftkey
+
+
+Introduction
+========================================================
+When user types one or more words, this model predicts 
+the next word. This model is based on the following objects:
+
+- Data Source:Sample data is produced from English language blog, news and twitter samples.
+ref: https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip
+
+- Data Cleaning: Converting all letters to lower case,
+    Removing: non ASCII characters, special characters, extra white space, 
+     numbers and punctuations.
+
+- Models: Bigram, Trigram, Quadgram .Rda files are produced using Ngram tokenization method.
+
+
+Algorithm
+========================================================
+
+- If user types 3 or more words, it checks user's last 3 words with quadgram combinations'
+  first 3 words, if it matches then it returns the last word of most frequent quadgram 
+  combination with those same first 3 words. If it does not match it applies similar logic
+  with trigram and bigram word combinations by iteration. 
+
+- To make the model faster, sizes of various N-gram data tables has  been reduced by
+  dropping least frequent N-grams.
+  
+Shiny App Interface
+========================================================
+- It has a text input box for user to type word/words.
+
+- It returns back whatever user has typed in another text box saying "What you typed".
+
+- It predicts the next word in another text box saying "Next word is" using the longest,
+  most frequent, matching N-gram (4-2gram)
+
+Summary
+========================================================
+- Average response time is under 1-2 seconds.
+
+- Application memory usage well under 160 MB.
+
+- Application is running at: https://basudha.shinyapps.io/WordPredictionApp/
+
+- Github link for various code files can be seen from the following link: https://github.com/basudhamisra/Data-Science-Capstone
+
+
